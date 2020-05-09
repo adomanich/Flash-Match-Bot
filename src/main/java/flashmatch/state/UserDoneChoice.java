@@ -1,17 +1,29 @@
 package flashmatch.state;
 
 import flashmatch.bot.FlashMatch;
-import lombok.Getter;
-import org.springframework.stereotype.Component;
+import flashmatch.entity.User;
+import flashmatch.service.MessageSenderService;
+import flashmatch.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
-@Component
-@Getter
+@Service("userDoneChoiceState")
 public class UserDoneChoice implements State {
+
+    @Autowired
+    private UserService userService;
+    @Autowired
+    private MessageSenderService messageSenderService;
+
     private final int STATE_ID = 1;
 
     @Override
-    public State getNext() {
-        return new UserWait();
+    public State updateUserState(User user) {
+        user.setStateId(getCurrentStateID());
+        userService.update(user);
+        FlashMatch.getLogger().info(user.getUserName() + " have chosen an interest");
+        messageSenderService.sendMessageToConcreteChat(user.getChatId(), "Біжу шукати тобі партнера, зажди трішки");
+        return this;
     }
 
     @Override

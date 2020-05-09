@@ -1,17 +1,29 @@
 package flashmatch.state;
 
 import flashmatch.bot.FlashMatch;
-import lombok.Getter;
-import org.springframework.stereotype.Component;
+import flashmatch.entity.User;
+import flashmatch.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Service;
 
-@Component
-@Getter
+@Primary
+@Service("userPreSelectState")
 public class UserChoseActivityState implements State {
+
+    @Autowired
+    private UserService userService;
+
     private final int STATE_ID = 0;
 
     @Override
-    public State getNext() {
-        return null;
+    public State updateUserState(User user) {
+        user.setNotification(true);
+        user.setStateId(getCurrentStateID());
+        user.setTime(0L);
+        userService.update(user);
+        FlashMatch.getLogger().info(user.getUserName() + " move to pre-select interest state");
+        return this;
     }
 
     @Override

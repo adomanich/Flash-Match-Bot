@@ -1,15 +1,28 @@
 package flashmatch.state;
 
 import flashmatch.bot.FlashMatch;
-import org.springframework.stereotype.Component;
+import flashmatch.entity.User;
+import flashmatch.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
-@Component
+import java.util.Date;
+
+@Service("userWaitState")
 public class UserWait implements State {
+
+    @Autowired
+    private UserService userService;
+
     private final int STATE_ID = 2;
 
     @Override
-    public State getNext() {
-        return new UserMatch();
+    public State updateUserState(User user) {
+        user.setStateId(getCurrentStateID());
+        user.setTime(new Date().getTime());
+        userService.update(user);
+        FlashMatch.getLogger().info(user.getUserName() + " user waiting for matching");
+        return this;
     }
 
     @Override

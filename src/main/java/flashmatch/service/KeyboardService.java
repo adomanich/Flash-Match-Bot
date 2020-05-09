@@ -1,10 +1,7 @@
-package flashmatch.manager;
+package flashmatch.service;
 
-import flashmatch.bot.FlashMatch;
 import flashmatch.entity.Interest;
 import flashmatch.entity.User;
-import flashmatch.service.InterestService;
-import flashmatch.service.UserService;
 import flashmatch.state.StateController;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -13,19 +10,22 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageTe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import static flashmatch.util.CallBackConstant.*;
 
 @Service
-public class ButtonManager {
+public class KeyboardService {
 
     @Autowired
     private InterestService interestService;
     @Autowired
     private UserService userService;
     @Autowired
-    private FlashMatch flashMatch;
+    private MessageSenderService messageSenderService;
 
     public void addExistedInterestButtons(long chatId, StateController stateController, int messageId) {
         var message = new EditMessageText();
@@ -36,13 +36,13 @@ public class ButtonManager {
         List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
         List<Interest> interests = interestService.getAllInterests();
         if (interests.isEmpty()) {
-            flashMatch.sendMessageToConcreteChat(chatId, "Sorry there is no one interest");
+            messageSenderService.sendMessageToConcreteChat(chatId, "Sorry there is no one interest");
         } else {
             interests.forEach(interest -> rowsInline.add(List.of(createButton(interest.getName(), interest.getName() + CALL_BACK_ENDING))));
             rowsInline.add(List.of(createButton("Back", BACK)));
             markupInline.setKeyboard(rowsInline);
             message.setReplyMarkup(markupInline);
-            flashMatch.sendEditMessage(message);
+            messageSenderService.sendEditMessage(message);
         }
     }
 
@@ -55,13 +55,13 @@ public class ButtonManager {
         List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
         List<User> users = userService.getAllUsers();
         if (users.isEmpty()) {
-            flashMatch.sendMessageToConcreteChat(chatId, "Sorry there is no one user");
+            messageSenderService.sendMessageToConcreteChat(chatId, "Sorry there is no one user");
         } else {
             users.forEach(interest -> rowsInline.add(List.of(createButton(interest.getUserName(), interest.getUserName() + CALL_BACK_ENDING))));
             rowsInline.add(List.of(createButton("Back", BACK)));
             markupInline.setKeyboard(rowsInline);
             message.setReplyMarkup(markupInline);
-            flashMatch.sendEditMessage(message);
+            messageSenderService.sendEditMessage(message);
         }
     }
 
@@ -72,7 +72,7 @@ public class ButtonManager {
         Map<String, String> buttonMap = Map.of("Add New Interest", ADD_NEW_INTEREST, "Remove Interest", REMOVE_INTEREST, "Remove User", REMOVE_USER, "Show All Interest", GET_INTERESTS);
         InlineKeyboardMarkup markupInline = createInlineKeyboard(buttonMap);
         message.setReplyMarkup(markupInline);
-        flashMatch.sendSimpleMessage(message);
+        messageSenderService.sendSimpleMessage(message);
     }
 
     public void addButtons(long chatId, int messageId) {
@@ -83,7 +83,7 @@ public class ButtonManager {
         LinkedHashMap<String, String> buttonMap = new LinkedHashMap<>(Map.of("Add New Interest", ADD_NEW_INTEREST, "Remove Interest", REMOVE_INTEREST, "Remove User", REMOVE_USER, "Show All Interest", GET_INTERESTS));
         InlineKeyboardMarkup markupInline = createInlineKeyboard(buttonMap);
         message.setReplyMarkup(markupInline);
-        flashMatch.sendEditMessage(message);
+        messageSenderService.sendEditMessage(message);
     }
 
     public void addMenuButtons(long chatId) {
@@ -93,7 +93,7 @@ public class ButtonManager {
         LinkedHashMap<String, String> menu = new LinkedHashMap<>(Map.of("Interests", CHOSE_INTERESTS, "Notifications", NOTIFICATIONS, "Help", HELP));
         InlineKeyboardMarkup markupInline = createInlineKeyboard(menu);
         message.setReplyMarkup(markupInline);
-        flashMatch.sendSimpleMessage(message);
+        messageSenderService.sendSimpleMessage(message);
     }
 
     public void addMenuButtons(long chatId, int messageId) {
@@ -104,7 +104,7 @@ public class ButtonManager {
         LinkedHashMap<String, String> menu = new LinkedHashMap<>(Map.of("Interests", CHOSE_INTERESTS, "Notifications", NOTIFICATIONS, "Help", HELP));
         InlineKeyboardMarkup markupInline = createInlineKeyboard(menu);
         message.setReplyMarkup(markupInline);
-        flashMatch.sendEditMessage(message);
+        messageSenderService.sendEditMessage(message);
     }
 
 
@@ -125,7 +125,7 @@ public class ButtonManager {
         rowsInline.add(List.of(createButton("Turn on", TURN_ON), createButton("Turn off", TURN_OFF)));
         markupInline.setKeyboard(rowsInline);
         message.setReplyMarkup(markupInline);
-        flashMatch.sendEditMessage(message);
+        messageSenderService.sendEditMessage(message);
     }
 
     public void addChooseButtons(long chatId) {
@@ -137,7 +137,7 @@ public class ButtonManager {
         rowsInline.add(List.of(createButton("Yes", YES), createButton("NO", NO)));
         markupInline.setKeyboard(rowsInline);
         message.setReplyMarkup(markupInline);
-        flashMatch.sendSimpleMessage(message);
+        messageSenderService.sendSimpleMessage(message);
     }
 
     private InlineKeyboardButton createButton(String text, String callBackText) {

@@ -14,7 +14,6 @@ public class CallBackConstant {
     public static final String BACK = "back_msg_text";
     public static final String YES = "yes_msg_text";
     public static final String NO = "no_msg_text";
-
     public static final String CALL_BACK_ENDING = "_msg_test";
 
     private CallBackConstant() {

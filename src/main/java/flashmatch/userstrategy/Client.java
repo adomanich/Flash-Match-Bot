@@ -2,11 +2,13 @@ package flashmatch.userstrategy;
 
 import flashmatch.bot.FlashMatch;
 import flashmatch.entity.Interest;
-import flashmatch.manager.ButtonManager;
 import flashmatch.service.InterestService;
+import flashmatch.service.KeyboardService;
+import flashmatch.service.MessageSenderService;
 import flashmatch.service.UserService;
 import flashmatch.state.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -20,27 +22,34 @@ import static flashmatch.util.CallBackConstant.*;
 public class Client implements User {
 
     @Autowired
+    @Qualifier("userPreSelectState")
+    private UserChoseActivityState userChoseActivityState;
+    @Autowired
+    @Qualifier("userDoneChoiceState")
     private UserDoneChoice userDoneChoice;
     @Autowired
+    @Qualifier("userWaitState")
     private UserWait userWait;
     @Autowired
+    @Qualifier("userMatchState")
     private UserMatch userMatch;
+
     @Autowired
-    private ButtonManager buttonManager;
-    @Autowired
-    private FlashMatch flashMatch;
+    private KeyboardService keyboardService;
     @Autowired
     private InterestService interestService;
     @Autowired
     private UserService userService;
-
+    @Autowired
+    private MessageSenderService messageSenderService;
+    @Autowired
     private StateController stateController;
     private long chatId;
     private Map<Long, List<Long>> matchedUsers = new HashMap<>();
 
     @Override
-    public void doWork(Update update, StateController stateController, boolean isMessage, long chatId) {
-        this.stateController = stateController;
+    public void doWork(Update update, boolean isMessage, long chatId) {
+        stateController.log();
         this.chatId = chatId;
         if (!isMessage) {
             String callBackData = update.getCallbackQuery().getData();
@@ -90,8 +99,8 @@ public class Client implements User {
             user.setNotification(true);
             userService.update(user);
         }
-        buttonManager.addMenuButtons(chatId, messageId);
-        flashMatch.sendMessageToConcreteChat(chatId, "Тепер ви отримуватимете нотифікації про з'єднання від людей, які шукають собі заняття :)");
+        keyboardService.addMenuButtons(chatId, messageId);
+        messageSenderService.sendMessageToConcreteChat(chatId, "Тепер ви отримуватимете нотифікації про з'єднання від людей, які шукають собі заняття :)");
     }
 
     private void onTurnOffCallBack(long chatId, int messageId) {
@@ -100,8 +109,8 @@ public class Client implements User {
             user.setNotification(false);
             userService.update(user);
         }
-        buttonManager.addMenuButtons(chatId, messageId);
-        flashMatch.sendMessageToConcreteChat(chatId, "Тепер ви не отримуватимете нотифікації про з'єднання від людей, які шукають собі заняття." +
+        keyboardService.addMenuButtons(chatId, messageId);
+        messageSenderService.sendMessageToConcreteChat(chatId, "Тепер ви не отримуватимете нотифікації про з'єднання від людей, які шукають собі заняття." +
                 "Вони автоматично з'являться коли ви захочете знайти когось");
     }
 
@@ -121,11 +130,8 @@ public class Client implements User {
                     flashmatch.entity.User userWantMatch = userService.getUsersByChatId(chatId);
                     flashmatch.entity.User userCurrentlyWait = userService.getUsersByChatId(id);
                     matchTwoUsers(userWantMatch, userCurrentlyWait, interestService.getInterestById(userWantMatch.getInterestId()).getName());
-                    userCurrentlyWait.setTime(0L);
-                    userCurrentlyWait.setStateId(3);
-                    userService.update(userCurrentlyWait);
                     matchedUsers.remove(id);
-                }, () -> flashMatch.sendMessageToConcreteChat(chatId, "Ми вже знайшли пару для цього солодня"));
+                }, () -> messageSenderService.sendMessageToConcreteChat(chatId, "Ми вже знайшли пару для цього солодня"));
     }
 
     private void onNoCallBack(long chatId) {
@@ -137,7 +143,7 @@ public class Client implements User {
                 .findFirst()
                 .ifPresent(element -> {
                     element.remove(chatId);
-                    flashMatch.sendMessageToConcreteChat(chatId, "Дякую за відповідь.");
+                    messageSenderService.sendMessageToConcreteChat(chatId, "Дякую за відповідь.");
                 });
     }
 
@@ -147,11 +153,14 @@ public class Client implements User {
         if (result.isPresent()) {
             String interestOfCurrentUser = result.get().getName();
             flashmatch.entity.User user = getCurrentUserFromDataBase(chatId, result.get().getId(), update.getCallbackQuery().getFrom().getUserName());
-            updateInterestOfUser(user, result.get().getId());
+            user.setInterestId(result.get().getId());
+            stateController = new StateController(userDoneChoice);
+            stateController.updateUserState(user);
 
             flashmatch.entity.User waitUser = userService.getWaitedUser(result.get().getId(), user.getChatId());
-            if (isSomebodyWaitOnMatch(waitUser, chatId)) {
-                putUserIntoQueue(user);
+            if (!isSomebodyWaitOnMatch(waitUser, chatId)) {
+                stateController = new StateController(userWait);
+                stateController.updateUserState(user);
             } else {
                 matchTwoUsers(user, waitUser, interestOfCurrentUser);
             }
@@ -159,8 +168,6 @@ public class Client implements User {
     }
 
     private flashmatch.entity.User getCurrentUserFromDataBase(long chatId, int interestId, String userName) {
-        stateController = new StateController(new UserDoneChoice());
-        stateController.log();
         flashmatch.entity.User user = userService.getUsersByChatId(chatId);
         if (user == null) {
             user = new flashmatch.entity.User(chatId, interestId, stateController.getCurrentStateId(), userName);
@@ -176,69 +183,46 @@ public class Client implements User {
                 .findAny();
     }
 
-    private void updateInterestOfUser(flashmatch.entity.User user, int actualInterestId) {
-        if (user.getInterestId() != actualInterestId) {
-            user.setInterestId(actualInterestId);
-            user.setNotification(true);
-            user.setTime(0L);
-            userService.update(user);
-        }
-    }
-
     private boolean isSomebodyWaitOnMatch(flashmatch.entity.User user, long chatId) {
-        return user == null || user.getChatId() == chatId;
-    }
-
-    private void putUserIntoQueue(flashmatch.entity.User user) {
-        stateController = new StateController(new UserWait());
-        stateController.log();
-        updateUserState(user, stateController.getCurrentStateId());
-        user.setTime(new Date().getTime());
-        userService.update(user);
-        flashMatch.sendMessageToConcreteChat(user.getChatId(), "Біжу шукати тобі партнера, зажди трішки");
-        FlashMatch.getLogger().info(Thread.currentThread().getName() + " wait with " + user.getUserName());
+        return user != null && user.getChatId() != chatId;
     }
 
     private void matchTwoUsers(flashmatch.entity.User userOne, flashmatch.entity.User userTwo, String commonInterest) {
         FlashMatch.getLogger().info(Thread.currentThread().getName() + "mathed with users :" + userOne.getUserName() + " and " + userTwo.getUserName());
         stateController = new StateController(new UserMatch());
         stateController.log();
-        flashMatch.sendMessageToConcreteChat(userTwo.getChatId(), "Я знайшов пару для тебе, " + "@" + userOne.getUserName() +
+        messageSenderService.sendMessageToConcreteChat(userTwo.getChatId(), "Я знайшов пару для тебе, " + "@" + userOne.getUserName() +
                 " також хоче " + commonInterest);
-        flashMatch.sendMessageToConcreteChat(userOne.getChatId(), "Я знайшов пару для тебе, " + "@" + userTwo.getUserName() +
+        messageSenderService.sendMessageToConcreteChat(userOne.getChatId(), "Я знайшов пару для тебе, " + "@" + userTwo.getUserName() +
                 " також хоче " + commonInterest);
-        updateUserState(userOne, stateController.getCurrentStateId());
-        updateUserState(userTwo, stateController.getCurrentStateId());
-    }
-
-    private void updateUserState(flashmatch.entity.User user, int newState) {
-        user.setStateId(newState);
-        userService.update(user);
+        stateController = new StateController(userMatch);
+        stateController.updateUserState(userOne);
+        stateController.updateUserState(userTwo);
     }
 
     private void start(long chatId) {
-        flashMatch.sendMessageToConcreteChat(chatId, "Привіт, я бот для пошуку людей по інтересах натисни щоб почати");
-        buttonManager.addMenuButtons(chatId);
+        messageSenderService.sendMessageToConcreteChat(chatId, "Привіт, я бот для пошуку людей по інтересах натисни щоб почати");
+        keyboardService.addMenuButtons(chatId);
     }
 
     private void interest(long chatId, int messageId) {
-        buttonManager.addExistedInterestButtons(chatId, stateController, messageId);
+        keyboardService.addExistedInterestButtons(chatId, stateController, messageId);
     }
 
     private void notification(long chatId, int messageId) {
-        buttonManager.addNotificationSenderButtons(chatId, messageId);
+        keyboardService.addNotificationSenderButtons(chatId, messageId);
     }
 
     private void back(long chatId, int messageId) {
-        buttonManager.addMenuButtons(chatId, messageId);
+        keyboardService.addMenuButtons(chatId, messageId);
     }
 
     private void help(long chatId) {
-        flashMatch.sendMessageToConcreteChat(chatId, "Сам ще не розумію, що тут відбувається, тому вибачся!");
+        messageSenderService.sendMessageToConcreteChat(chatId, "Сам ще не розумію, що тут відбувається, тому вибачся!");
     }
 
     private void onDefault(long chatId) {
-        flashMatch.sendMessageToConcreteChat(chatId, "Вибачте, занадто нерозумний, " +
+        messageSenderService.sendMessageToConcreteChat(chatId, "Вибачте, занадто нерозумний, " +
                 "щоб зрозуміти це повідомлення, будь ласка, спробуйте ще раз.");
     }
 
@@ -255,9 +239,9 @@ public class Client implements User {
                     users.stream()
                             .filter(flashmatch.entity.User::isNotification)
                             .forEach(user -> {
-                                flashMatch.sendMessageToConcreteChat(user.getChatId(), "@" + timeOffUser.getUserName() + " хоче " + waitedInterest.getName());
+                                messageSenderService.sendMessageToConcreteChat(user.getChatId(), "@" + timeOffUser.getUserName() + " хоче " + waitedInterest.getName());
                                 FlashMatch.getLogger().info("Message was send to " + user.getUserName());
-                                buttonManager.addChooseButtons(user.getChatId());
+                                keyboardService.addChooseButtons(user.getChatId());
                                 matchedUsersChatId.add(user.getChatId());
                             });
                     matchedUsers.put(timeOffUser.getChatId(), matchedUsersChatId);
@@ -278,22 +262,15 @@ public class Client implements User {
                     if (userWaitTime >= minWaitTime && userWaitTime < maxWaitTime) {
                         return true;
                     } else if (userWaitTime >= maxWaitTime) {
-                        proceedUserToInitialState(user);
+                        matchedUsers.remove(user.getChatId());
+                        stateController = new StateController(userChoseActivityState);
+                        stateController.updateUserState(user);
+                        messageSenderService.sendMessageToConcreteChat(user.getChatId(), "Вибач, та нажаль не можемо знайти для тебе пари прямо зараз, спробуй пізніше");
                         return false;
                     } else {
                         return false;
                     }
                 })
                 .collect(Collectors.toList());
-    }
-
-    private void proceedUserToInitialState(flashmatch.entity.User user) {
-        stateController = new StateController(new UserChoseActivityState());
-        matchedUsers.remove(user.getChatId());
-        user.setTime(0L);
-        user.setStateId(0);
-        userService.update(user);
-        stateController.log();
-        flashMatch.sendMessageToConcreteChat(chatId, "Вибач, та нажаль не можемо знайти для тебе пари прямо зараз, спробуй пізніше");
     }
 }

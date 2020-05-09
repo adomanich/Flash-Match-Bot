@@ -1,8 +1,10 @@
 package flashmatch.state;
 
+import flashmatch.entity.User;
+
 public interface State {
 
-    State getNext();
+    State updateUserState(User user);
 
     void log();
 

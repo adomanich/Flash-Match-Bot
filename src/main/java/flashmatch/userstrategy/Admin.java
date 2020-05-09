@@ -2,8 +2,9 @@ package flashmatch.userstrategy;
 
 import flashmatch.bot.FlashMatch;
 import flashmatch.entity.Interest;
-import flashmatch.manager.ButtonManager;
 import flashmatch.service.InterestService;
+import flashmatch.service.KeyboardService;
+import flashmatch.service.MessageSenderService;
 import flashmatch.service.UserService;
 import flashmatch.state.StateController;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,31 +26,33 @@ public class Admin implements User {
     @Autowired
     private UserService userService;
     @Autowired
-    private FlashMatch flashMatch;
+    private MessageSenderService messageSenderService;
     @Autowired
-    private ButtonManager buttonManager;
+    private KeyboardService keyboardService;
+    @Autowired
+    private StateController stateController;
 
     @Override
-    public void doWork(Update update, StateController stateController, boolean isMessage, long chatId) {
+    public void doWork(Update update, boolean isMessage, long chatId) {
         if (!isMessage) {
             String message = update.getCallbackQuery().getData();
             int messageId = update.getCallbackQuery().getMessage().getMessageId();
             switch (message) {
                 case ADD_NEW_INTEREST:
-                    flashMatch.sendMessageToConcreteChat(chatId, "Plese input new interest");
+                    messageSenderService.sendMessageToConcreteChat(chatId, "Plese input new interest");
                     break;
                 case REMOVE_INTEREST:
-                    flashMatch.sendMessageToConcreteChat(chatId, "Please remove interest from list");
-                    buttonManager.addExistedInterestButtons(chatId, stateController, messageId);
+                    messageSenderService.sendMessageToConcreteChat(chatId, "Please remove interest from list");
+                    keyboardService.addExistedInterestButtons(chatId, stateController, messageId);
                     break;
                 case GET_INTERESTS:
                     showAllInterests(chatId, stateController);
                     break;
                 case BACK:
-                    buttonManager.addButtons(chatId, messageId);
+                    keyboardService.addButtons(chatId, messageId);
                     break;
                 case REMOVE_USER:
-                    buttonManager.addExistedUsersButtons(chatId, messageId);
+                    keyboardService.addExistedUsersButtons(chatId, messageId);
                     break;
                 default:
                     if (!checkRemoveInterestCallBack(update, chatId, stateController, messageId)) {
@@ -60,11 +63,11 @@ public class Admin implements User {
         } else {
             Message message = update.getMessage();
             if (message.getText().equals("/start")) {
-                buttonManager.addButtons(chatId);
+                keyboardService.addButtons(chatId);
             } else {
                 Interest interest = new Interest(message.getText());
                 interestService.addInterest(interest);
-                buttonManager.addButtons(chatId);
+                keyboardService.addButtons(chatId);
                 FlashMatch.getLogger().info(message.getText() + " was added");
             }
         }
@@ -73,12 +76,12 @@ public class Admin implements User {
     private void showAllInterests(long chatId, StateController stateController) {
         List<Interest> interests = interestService.getAllInterests();
         if (interests.isEmpty()) {
-            flashMatch.sendMessageToConcreteChat(chatId, "Sorry there is no one interest");
+            messageSenderService.sendMessageToConcreteChat(chatId, "Sorry there is no one interest");
         } else {
             String message = interests.stream()
                     .map(Interest::getName)
                     .collect(Collectors.joining("\n"));
-            flashMatch.sendMessageToConcreteChat(chatId, message);
+            messageSenderService.sendMessageToConcreteChat(chatId, message);
         }
     }
 
@@ -91,7 +94,7 @@ public class Admin implements User {
         boolean isPresent = result.isPresent();
         if (isPresent) {
             interestService.delete(result.get());
-            buttonManager.addExistedInterestButtons(chatId, stateController, messageId);
+            keyboardService.addExistedInterestButtons(chatId, stateController, messageId);
             FlashMatch.getLogger().info(result.get().getName() + " was deleted");
         }
         return isPresent;
@@ -105,7 +108,7 @@ public class Admin implements User {
                 .findAny();
         if (result.isPresent()) {
             userService.delete(result.get());
-            buttonManager.addExistedInterestButtons(chatId, stateController, messageId);
+            keyboardService.addExistedInterestButtons(chatId, stateController, messageId);
             FlashMatch.getLogger().info(result.get().getUserName() + " was deleted");
         }
     }

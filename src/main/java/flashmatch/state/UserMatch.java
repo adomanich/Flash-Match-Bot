@@ -1,17 +1,29 @@
 package flashmatch.state;
 
 import flashmatch.bot.FlashMatch;
-import lombok.Getter;
-import org.springframework.stereotype.Component;
+import flashmatch.entity.User;
+import flashmatch.service.MessageSenderService;
+import flashmatch.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
-@Component
-@Getter
+@Service("userMatchState")
 public class UserMatch implements State {
+
+    @Autowired
+    private UserService userService;
+    @Autowired
+    private MessageSenderService messageSenderService;
+
     private final int STATE_ID = 3;
 
     @Override
-    public State getNext() {
-        return null;
+    public State updateUserState(User user) {
+        user.setTime(0L);
+        user.setStateId(getCurrentStateID());
+        userService.update(user);
+        FlashMatch.getLogger().info(user.getUserName() + " have matched");
+        return this;
     }
 
     @Override
