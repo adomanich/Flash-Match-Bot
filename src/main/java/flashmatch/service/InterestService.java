@@ -8,6 +8,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
+
+import static flashmatch.util.CallBackConstant.CALL_BACK_ENDING;
 
 @Service
 public class InterestService {
@@ -33,4 +36,12 @@ public class InterestService {
     public void delete(Interest interest) {
         interestRepository.delete(interest);
     }
+
+    public Optional<Interest> getInterestCorrespondingToCallBack(String callBackData) {
+        return getAllInterests()
+                .stream()
+                .filter(interest -> (interest.getName() + CALL_BACK_ENDING).equals(callBackData))
+                .findAny();
+    }
+
 }

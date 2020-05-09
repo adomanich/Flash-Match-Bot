@@ -149,7 +149,7 @@ public class Client implements User {
 
     private void checkCallBack(Update update) {
         String callBackMessage = update.getCallbackQuery().getData();
-        Optional<Interest> result = getInterestCorrespondingToCallBack(callBackMessage);
+        Optional<Interest> result = interestService.getInterestCorrespondingToCallBack(callBackMessage);
         if (result.isPresent()) {
             String interestOfCurrentUser = result.get().getName();
             flashmatch.entity.User user = getCurrentUserFromDataBase(chatId, result.get().getId(), update.getCallbackQuery().getFrom().getUserName());
@@ -174,13 +174,6 @@ public class Client implements User {
             userService.addNew(user);
         }
         return user;
-    }
-
-    private Optional<Interest> getInterestCorrespondingToCallBack(String callBackData) {
-        return interestService.getAllInterests()
-                .stream()
-                .filter(interest -> (interest.getName() + CALL_BACK_ENDING).equals(callBackData))
-                .findAny();
     }
 
     private boolean isSomebodyWaitOnMatch(flashmatch.entity.User user, long chatId) {
