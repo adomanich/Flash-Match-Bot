@@ -115,10 +115,6 @@ public class Client implements User {
     }
 
     private void onYesCallback() {
-        matchPair();
-    }
-
-    private void matchPair() {
         matchedUsers.entrySet()
                 .stream()
                 .filter(current -> current.getValue()
@@ -137,8 +133,7 @@ public class Client implements User {
     private void onNoCallBack(long chatId) {
         matchedUsers.values()
                 .stream()
-                .filter(longs -> longs
-                        .stream()
+                .filter(longs -> longs.stream()
                         .anyMatch(c -> c.equals(chatId)))
                 .findFirst()
                 .ifPresent(element -> {
